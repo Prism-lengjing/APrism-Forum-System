@@ -1,0 +1,25 @@
+# Dependencies
+**/node_modules/
+
+# Build artifacts
+**/dist/
+**/dist-ssr/
+**/coverage/
+
+# Runtime data
+**/*.log
+**/logs/
+**/*.db
+**/*.db-journal
+**/*-wal
+**/*-shm
+
+# Env files
+.env
+.env.*
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
