@@ -4,8 +4,8 @@
 APrism Forum System 是一个前后端分离的论坛系统。  
 APrism Forum System is a full-stack forum project with separated frontend and backend.
 
-当前目录包含两个子项目：  
-This repository currently contains two subprojects:
+当前仓库包含两个子项目：  
+This repository contains two subprojects:
 
 - `forum-backend` (Node.js + Express + TypeScript + SQLite)
 - `forum-frontend` (React + Vite + TypeScript + Zustand)
@@ -98,6 +98,75 @@ Workflow file: `.github/workflows/ci.yml`
 - `cache-dependency-path: '**/package-lock.json'`
 - 安装依赖有兜底：有锁文件用 `npm ci`，否则 `npm install`  
   Install fallback: use `npm ci` when lock file exists, otherwise `npm install`
+
+## 贡献流程 | Contribution Workflow
+1. 从最新主分支创建功能分支。  
+   Create a feature branch from the latest main branch.
+2. 在对应子项目内开发（`forum-backend` 或 `forum-frontend`）。  
+   Work in the relevant subproject (`forum-backend` or `forum-frontend`).
+3. 提交前执行本地自检。  
+   Run local checks before commit.
+
+### 分支命名规范 | Branch Naming Convention
+推荐格式：`<type>/<scope>-<short-description>`  
+Recommended format: `<type>/<scope>-<short-description>`
+
+常用类型 | Common types:
+- `feat`：新功能 | new feature
+- `fix`：缺陷修复 | bug fix
+- `refactor`：重构 | refactor
+- `docs`：文档更新 | docs update
+- `test`：测试相关 | tests
+
+命名示例 | Examples:
+- `feat/backend-moderator-logs`
+- `feat/frontend-thread-moderation-panel`
+- `fix/frontend-header-encoding`
+- `fix/ci-npm-lock-install`
+- `docs/readme-bilingual-update`
+
+### 提交信息规范 | Commit Message Convention
+推荐使用 Conventional Commits：  
+Use Conventional Commits format:
+
+`<type>(<scope>): <summary>`
+
+常用类型 | Common types:
+- `feat`：新功能 | new feature
+- `fix`：缺陷修复 | bug fix
+- `refactor`：重构（无功能变更）| code refactor (no behavior change)
+- `docs`：文档更新 | documentation update
+- `test`：测试新增/调整 | tests
+- `chore`：构建、脚本、依赖维护 | tooling/deps/maintenance
+
+提交示例 | Commit examples:
+- `feat(backend): add forum moderator logs endpoint`
+- `fix(frontend): repair header text encoding`
+- `test(e2e): stabilize notification settings selectors`
+- `docs(readme): add bilingual contribution guide`
+
+后端建议检查 | Backend pre-checks:
+```bash
+cd forum-backend
+npm run build
+npm run test
+```
+
+前端建议检查 | Frontend pre-checks:
+```bash
+cd forum-frontend
+npm run lint
+npm run test
+npm run build
+```
+
+提交与 PR 建议 | Commit and PR guidelines:
+- Commit 信息清晰描述变更目的和范围。  
+  Use clear commit messages describing intent and scope.
+- PR 描述包含：背景、改动点、验证结果、风险/回滚方案。  
+  PR description should include context, changes, validation, and rollback/risk notes.
+- 涉及接口变更时，同步更新文档仓库。  
+  If API contracts change, update the documentation repository accordingly.
 
 ## 开发账号（种子数据） | Seed Accounts
 - `admin` / `password123`
