@@ -1,6 +1,11 @@
 import { apiClient, unwrapResponse } from './api'
 import type { PaginatedResult } from '../types/api'
-import type { ForumCategory, ForumItem } from '../types/forum'
+import type {
+  ForumCategory,
+  ForumItem,
+  ForumModerator,
+  ModeratorActionLogPage,
+} from '../types/forum'
 import type { ThreadSummary } from '../types/thread'
 
 export const forumService = {
@@ -28,5 +33,21 @@ export const forumService = {
       params: { page, pageSize },
     })
     return unwrapResponse<PaginatedResult<ThreadSummary>>(response)
+  },
+
+  async getForumModerators(forumId: number): Promise<ForumModerator[]> {
+    const response = await apiClient.get(`/forums/${forumId}/moderators`)
+    return unwrapResponse<ForumModerator[]>(response)
+  },
+
+  async getForumModeratorLogs(
+    forumId: number,
+    page = 1,
+    pageSize = 20
+  ): Promise<ModeratorActionLogPage> {
+    const response = await apiClient.get(`/forums/${forumId}/moderator-logs`, {
+      params: { page, pageSize },
+    })
+    return unwrapResponse<ModeratorActionLogPage>(response)
   },
 }

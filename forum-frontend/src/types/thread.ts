@@ -37,3 +37,9 @@ export interface CreateThreadInput {
   content: string
   type?: string
 }
+
+export interface ModerateThreadInput {
+  isPinned?: boolean
+  isLocked?: boolean
+  isEssence?: boolean
+}

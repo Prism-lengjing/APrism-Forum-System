@@ -93,4 +93,85 @@ router.delete(
   }
 );
 
+router.patch(
+  '/threads/:id/moderation',
+  requireAuth,
+  [
+    param('id').isInt({ min: 1 }),
+    body().custom((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Invalid request body');
+      }
+
+      const candidates = ['isPinned', 'isLocked', 'isEssence'] as const;
+      const hasAny = candidates.some((key) =>
+        Object.prototype.hasOwnProperty.call(value, key)
+      );
+      if (!hasAny) {
+        throw new Error('At least one moderation field is required');
+      }
+
+      for (const key of candidates) {
+        if (
+          Object.prototype.hasOwnProperty.call(value, key) &&
+          typeof (value as Record<string, unknown>)[key] !== 'boolean'
+        ) {
+          throw new Error(`Field ${key} must be boolean`);
+        }
+      }
+
+      return true;
+    }),
+  ],
+  validateRequest,
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as Request & { user?: AuthUser }).user;
+      if (!user) {
+        throw new HttpError(401, 'Unauthorized');
+      }
+      const threadId = Number(req.params.id);
+      const result = threadService.moderateThread(
+        threadId,
+        {
+          isPinned:
+            typeof req.body.isPinned === 'boolean' ? req.body.isPinned : undefined,
+          isLocked:
+            typeof req.body.isLocked === 'boolean' ? req.body.isLocked : undefined,
+          isEssence:
+            typeof req.body.isEssence === 'boolean' ? req.body.isEssence : undefined,
+        },
+        user
+      );
+      return sendSuccess(res, result, 'Thread moderation updated');
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
+router.post(
+  '/threads/:id/move',
+  requireAuth,
+  [
+    param('id').isInt({ min: 1 }),
+    body('targetForumId').isInt({ min: 1 }),
+  ],
+  validateRequest,
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as Request & { user?: AuthUser }).user;
+      if (!user) {
+        throw new HttpError(401, 'Unauthorized');
+      }
+      const threadId = Number(req.params.id);
+      const targetForumId = Number(req.body.targetForumId);
+      const result = threadService.moveThread(threadId, targetForumId, user);
+      return sendSuccess(res, result, 'Thread moved');
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
 export default router;

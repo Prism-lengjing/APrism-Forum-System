@@ -31,3 +31,32 @@ export interface DailySigninResult {
   pointsAwarded: number
   summary: PointsSummary
 }
+
+export type LeaderboardPeriod = 'all' | '7d' | '30d'
+
+export interface PointsLeaderboardItem {
+  rank: number
+  userId: number
+  username: string
+  avatar: string | null
+  level: number
+  experience: number
+  score: number
+  period: LeaderboardPeriod
+  threadCount: number
+  postCount: number
+}
+
+export interface SigninLeaderboardItem {
+  rank: number
+  userId: number
+  username: string
+  avatar: string | null
+  bestStreak: number
+  totalSigninDays: number
+  lastSignDate: string | null
+  period: LeaderboardPeriod
+}
+
+export type PointsLeaderboardPage = PaginatedResult<PointsLeaderboardItem>
+export type SigninLeaderboardPage = PaginatedResult<SigninLeaderboardItem>

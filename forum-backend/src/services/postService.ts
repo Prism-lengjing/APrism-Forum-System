@@ -1,4 +1,5 @@
 import { getDatabase } from '../database/connection';
+import { notificationService } from './notificationService';
 import { pointsService } from './pointsService';
 import type { AuthUser, PaginatedResult, PostItem } from '../types/models';
 import { HttpError } from '../utils/httpError';
@@ -59,11 +60,13 @@ class PostService {
   private getThreadOrFail(threadId: number): ThreadCheckRow {
     const db = getDatabase();
     const thread = db
-      .prepare('SELECT id, forum_id, user_id, is_locked FROM threads WHERE id = ? AND is_visible = 1')
+      .prepare(
+        'SELECT id, forum_id, user_id, is_locked FROM threads WHERE id = ? AND is_visible = 1'
+      )
       .get(threadId) as ThreadCheckRow | undefined;
 
     if (!thread) {
-      throw new HttpError(404, '主题不存在');
+      throw new HttpError(404, 'Thread not found');
     }
 
     return thread;
@@ -83,7 +86,7 @@ class PostService {
       .get(postId) as PostRow | undefined;
 
     if (!row) {
-      throw new HttpError(404, '帖子不存在');
+      throw new HttpError(404, 'Post not found');
     }
 
     return mapPost(row);
@@ -137,7 +140,7 @@ class PostService {
     const createTx = db.transaction(() => {
       const thread = this.getThreadOrFail(threadId);
       if (Boolean(thread.is_locked)) {
-        throw new HttpError(400, '主题已锁定，无法回复');
+        throw new HttpError(400, 'Thread is locked');
       }
 
       if (typeof parentId === 'number') {
@@ -145,7 +148,7 @@ class PostService {
           .prepare('SELECT id FROM posts WHERE id = ? AND thread_id = ? AND is_visible = 1')
           .get(parentId, threadId) as { id: number } | undefined;
         if (!parentPost) {
-          throw new HttpError(404, '引用的帖子不存在');
+          throw new HttpError(404, 'Parent post not found');
         }
       }
 
@@ -192,6 +195,16 @@ class PostService {
       );
 
       pointsService.awardForPostCreated(currentUser.id, postId, db);
+      notificationService.notifyPostCreated(
+        {
+          threadId,
+          postId,
+          parentId,
+          postAuthorId: currentUser.id,
+          content,
+        },
+        db
+      );
 
       return postId;
     });
@@ -200,29 +213,41 @@ class PostService {
     return this.getPostById(postId);
   }
 
-  likePost(postId: number): { postId: number; likeCount: number } {
+  likePost(postId: number, currentUser: AuthUser): { postId: number; likeCount: number } {
     const db = getDatabase();
-    const updateResult = db
-      .prepare(
-        `UPDATE posts
-         SET like_count = like_count + 1,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND is_visible = 1`
-      )
-      .run(postId);
+    const likeTx = db.transaction(() => {
+      const updateResult = db
+        .prepare(
+          `UPDATE posts
+           SET like_count = like_count + 1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND is_visible = 1`
+        )
+        .run(postId);
 
-    if (updateResult.changes === 0) {
-      throw new HttpError(404, '帖子不存在');
-    }
+      if (updateResult.changes === 0) {
+        throw new HttpError(404, 'Post not found');
+      }
 
-    const row = db
-      .prepare('SELECT like_count FROM posts WHERE id = ?')
-      .get(postId) as { like_count: number };
+      notificationService.notifyPostLiked(
+        {
+          postId,
+          actorUserId: currentUser.id,
+        },
+        db
+      );
 
-    return {
-      postId,
-      likeCount: Number(row.like_count),
-    };
+      const row = db
+        .prepare('SELECT like_count FROM posts WHERE id = ?')
+        .get(postId) as { like_count: number };
+
+      return {
+        postId,
+        likeCount: Number(row.like_count),
+      };
+    });
+
+    return likeTx();
   }
 }
 

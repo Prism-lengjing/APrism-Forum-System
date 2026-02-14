@@ -1,4 +1,5 @@
 import { getDatabase } from '../database/connection';
+import { moderationService } from './moderationService';
 import { pointsService } from './pointsService';
 import type { AuthUser, ThreadDetail } from '../types/models';
 import { HttpError } from '../utils/httpError';
@@ -43,6 +44,12 @@ export interface UpdateThreadInput {
   title?: string;
   content?: string;
   type?: string;
+}
+
+export interface ModerateThreadInput {
+  isPinned?: boolean;
+  isLocked?: boolean;
+  isEssence?: boolean;
 }
 
 function mapThreadDetail(row: ThreadDetailRow): ThreadDetail {
@@ -206,6 +213,153 @@ class ThreadService {
     }
 
     return updated;
+  }
+
+  private ensureCanModerateForum(forumId: number, currentUser: AuthUser): void {
+    if (currentUser.role === 'admin') {
+      return;
+    }
+
+    if (!moderationService.isModerator(forumId, currentUser.id)) {
+      throw new HttpError(403, 'Forbidden');
+    }
+  }
+
+  moderateThread(
+    threadId: number,
+    input: ModerateThreadInput,
+    currentUser: AuthUser
+  ): ThreadDetail {
+    const db = getDatabase();
+    const owner = db
+      .prepare('SELECT id, forum_id, user_id, is_visible FROM threads WHERE id = ?')
+      .get(threadId) as ThreadOwnerRow | undefined;
+
+    if (!owner || !Boolean(owner.is_visible)) {
+      throw new HttpError(404, 'Thread not found');
+    }
+
+    this.ensureCanModerateForum(owner.forum_id, currentUser);
+
+    const current = this.fetchThreadById(threadId);
+    if (!current) {
+      throw new HttpError(404, 'Thread not found');
+    }
+
+    const nextPinned =
+      typeof input.isPinned === 'boolean' ? input.isPinned : current.isPinned;
+    const nextLocked =
+      typeof input.isLocked === 'boolean' ? input.isLocked : current.isLocked;
+    const nextEssence =
+      typeof input.isEssence === 'boolean' ? input.isEssence : current.isEssence;
+
+    db.prepare(
+      `UPDATE threads
+       SET is_pinned = ?,
+           is_locked = ?,
+           is_essence = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(nextPinned ? 1 : 0, nextLocked ? 1 : 0, nextEssence ? 1 : 0, threadId);
+
+    const updated = this.fetchThreadById(threadId);
+    if (!updated) {
+      throw new HttpError(500, 'Thread moderation update failed');
+    }
+
+    moderationService.logAction({
+      forumId: owner.forum_id,
+      threadId,
+      moderatorUserId: currentUser.id,
+      action: 'thread_moderation_update',
+      detail: JSON.stringify({
+        from: {
+          isPinned: current.isPinned,
+          isLocked: current.isLocked,
+          isEssence: current.isEssence,
+        },
+        to: {
+          isPinned: updated.isPinned,
+          isLocked: updated.isLocked,
+          isEssence: updated.isEssence,
+        },
+      }),
+    });
+
+    return updated;
+  }
+
+  moveThread(
+    threadId: number,
+    targetForumId: number,
+    currentUser: AuthUser
+  ): ThreadDetail {
+    const db = getDatabase();
+    const owner = db
+      .prepare('SELECT id, forum_id, user_id, is_visible FROM threads WHERE id = ?')
+      .get(threadId) as ThreadOwnerRow | undefined;
+
+    if (!owner || !Boolean(owner.is_visible)) {
+      throw new HttpError(404, 'Thread not found');
+    }
+
+    if (owner.forum_id === targetForumId) {
+      throw new HttpError(400, 'Target forum must be different from current forum');
+    }
+
+    const targetForum = db
+      .prepare('SELECT id FROM forums WHERE id = ? AND is_visible = 1')
+      .get(targetForumId) as { id: number } | undefined;
+    if (!targetForum) {
+      throw new HttpError(404, 'Target forum not found');
+    }
+
+    this.ensureCanModerateForum(owner.forum_id, currentUser);
+
+    const moveTx = db.transaction(() => {
+      db.prepare(
+        `UPDATE threads
+         SET forum_id = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).run(targetForumId, threadId);
+
+      db.prepare(
+        `UPDATE forums
+         SET thread_count = CASE
+           WHEN thread_count > 0 THEN thread_count - 1
+           ELSE 0
+         END
+         WHERE id = ?`
+      ).run(owner.forum_id);
+
+      db.prepare(
+        `UPDATE forums
+         SET thread_count = thread_count + 1,
+             last_thread_id = ?,
+             last_post_time = CURRENT_TIMESTAMP
+         WHERE id = ?`
+      ).run(threadId, targetForumId);
+    });
+
+    moveTx();
+
+    moderationService.logAction({
+      forumId: owner.forum_id,
+      threadId,
+      moderatorUserId: currentUser.id,
+      action: 'thread_move',
+      detail: JSON.stringify({
+        fromForumId: owner.forum_id,
+        toForumId: targetForumId,
+      }),
+    });
+
+    const moved = this.fetchThreadById(threadId);
+    if (!moved) {
+      throw new HttpError(500, 'Thread move failed');
+    }
+
+    return moved;
   }
 
   deleteThread(threadId: number, currentUser: AuthUser): void {

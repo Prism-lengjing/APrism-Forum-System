@@ -10,6 +10,10 @@ import threadRoutes from './routes/threads';
 import postRoutes from './routes/posts';
 import userRoutes from './routes/users';
 import pointsRoutes from './routes/points';
+import badgesRoutes from './routes/badges';
+import notificationsRoutes from './routes/notifications';
+import messagesRoutes from './routes/messages';
+import searchRoutes from './routes/search';
 import { HttpError } from './utils/httpError';
 
 export function createApp() {
@@ -48,11 +52,26 @@ export function createApp() {
         categories: '/api/categories',
         forums: '/api/forums',
         forumThreads: '/api/forums/:id/threads',
+        forumModerators: '/api/forums/:id/moderators',
+        forumModeratorLogs: '/api/forums/:id/moderator-logs',
         threadDetail: '/api/threads/:id',
+        threadModeration: '/api/threads/:id/moderation',
+        threadMove: '/api/threads/:id/move',
         threadPosts: '/api/threads/:id/posts',
         posts: '/api/posts',
         users: '/api/users',
+        userFollow: '/api/users/:id/follow',
+        userFollowStatus: '/api/users/:id/follow-status',
         points: '/api/points',
+        pointsLeaderboard: '/api/points/leaderboard',
+        signinLeaderboard: '/api/points/signin-leaderboard',
+        badges: '/api/badges',
+        notifications: '/api/notifications',
+        messages: '/api/messages',
+        messageConversations: '/api/messages/conversations',
+        conversationMessages: '/api/messages/conversations/:id',
+        threadSearch: '/api/search/threads',
+        userSearch: '/api/search/users',
       },
     });
   });
@@ -68,6 +87,10 @@ export function createApp() {
   app.use('/api', postRoutes);
   app.use('/api', userRoutes);
   app.use('/api', pointsRoutes);
+  app.use('/api', badgesRoutes);
+  app.use('/api', notificationsRoutes);
+  app.use('/api', messagesRoutes);
+  app.use('/api', searchRoutes);
 
   app.use((_req, res) => {
     res.status(404).json({
@@ -87,6 +110,36 @@ export function createApp() {
         return res.status(err.statusCode).json({
           success: false,
           message: err.message,
+        });
+      }
+
+      const statusError = err as {
+        status?: unknown;
+        statusCode?: unknown;
+        type?: unknown;
+        message?: unknown;
+      };
+      const statusCode =
+        typeof statusError.statusCode === 'number'
+          ? statusError.statusCode
+          : typeof statusError.status === 'number'
+          ? statusError.status
+          : null;
+
+      if (statusCode !== null && statusCode >= 400 && statusCode < 500) {
+        if (statusError.type === 'entity.parse.failed') {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid JSON payload',
+          });
+        }
+
+        return res.status(statusCode).json({
+          success: false,
+          message:
+            typeof statusError.message === 'string' && statusError.message.length > 0
+              ? statusError.message
+              : 'Bad request',
         });
       }
 

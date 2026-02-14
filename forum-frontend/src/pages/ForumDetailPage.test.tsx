@@ -10,6 +10,35 @@ const mocks = vi.hoisted(() => ({
   fetchForumThreads: vi.fn().mockResolvedValue(undefined),
   createThread: vi.fn().mockResolvedValue({ id: 777 }),
   authState: { isAuthenticated: true },
+  threadPage: {
+    items: [
+      {
+        id: 11,
+        forumId: 1,
+        title: 'JEST_Thread',
+        excerpt: 'JEST_Excerpt',
+        type: 'normal',
+        isPinned: false,
+        isLocked: false,
+        isEssence: false,
+        viewCount: 12,
+        replyCount: 3,
+        likeCount: 0,
+        lastPostTime: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        author: {
+          id: 2,
+          username: 'jest_author',
+          avatar: null,
+        },
+      },
+    ],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 2,
+  },
 }))
 
 vi.mock('react-hot-toast', () => ({
@@ -51,35 +80,7 @@ vi.mock('../store/forumStore', () => ({
       lastPostTime: null,
       sortOrder: 1,
     },
-    threadPage: {
-      items: [
-        {
-          id: 11,
-          forumId: 1,
-          title: 'JEST_Thread',
-          excerpt: 'JEST_Excerpt',
-          type: 'normal',
-          isPinned: false,
-          isLocked: false,
-          isEssence: false,
-          viewCount: 12,
-          replyCount: 3,
-          likeCount: 0,
-          lastPostTime: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-          author: {
-            id: 2,
-            username: 'jest_author',
-            avatar: null,
-          },
-        },
-      ],
-      page: 1,
-      pageSize: 20,
-      total: 1,
-      totalPages: 2,
-    },
+    threadPage: mocks.threadPage,
     loading: false,
     error: null,
     fetchForumById: mocks.fetchForumById,
@@ -109,6 +110,35 @@ describe('ForumDetailPage', () => {
     mocks.fetchForumById.mockClear()
     mocks.fetchForumThreads.mockClear()
     mocks.createThread.mockClear()
+    mocks.threadPage = {
+      items: [
+        {
+          id: 11,
+          forumId: 1,
+          title: 'JEST_Thread',
+          excerpt: 'JEST_Excerpt',
+          type: 'normal',
+          isPinned: false,
+          isLocked: false,
+          isEssence: false,
+          viewCount: 12,
+          replyCount: 3,
+          likeCount: 0,
+          lastPostTime: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          author: {
+            id: 2,
+            username: 'jest_author',
+            avatar: null,
+          },
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 2,
+    }
   })
 
   it('submits new thread and navigates to thread detail', async () => {
@@ -146,12 +176,73 @@ describe('ForumDetailPage', () => {
     })
   })
 
+  it('shows error toast and keeps page when create thread fails', async () => {
+    mocks.createThread.mockRejectedValueOnce(new Error('create failed'))
+
+    render(
+      <MemoryRouter>
+        <ForumDetailPage />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(mocks.fetchForumById).toHaveBeenCalledWith(1)
+      expect(mocks.fetchForumThreads).toHaveBeenCalledWith(1, 1, 20)
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('标题（3-255字）'), {
+      target: { value: 'JEST_error_title' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('内容'), {
+      target: { value: 'JEST_error_content' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '发布主题' }))
+
+    await waitFor(() => {
+      expect(mocks.createThread).toHaveBeenCalledWith({
+        forumId: 1,
+        title: 'JEST_error_title',
+        content: 'JEST_error_content',
+        type: 'normal',
+      })
+    })
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    })
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(mocks.navigate).not.toHaveBeenCalled()
+  })
+
   it('changes page and reloads thread list', async () => {
     render(
       <MemoryRouter>
         <ForumDetailPage />
       </MemoryRouter>
     )
+
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+    await waitFor(() => {
+      expect(mocks.fetchForumThreads).toHaveBeenCalledWith(1, 2, 20)
+    })
+  })
+
+  it('shows empty thread state and still reloads on page change', async () => {
+    mocks.threadPage = {
+      items: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 2,
+    }
+
+    render(
+      <MemoryRouter>
+        <ForumDetailPage />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText(/暂无主题/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '下一页' }))
 
